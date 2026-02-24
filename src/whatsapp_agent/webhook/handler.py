@@ -8,7 +8,6 @@ import httpx
 from fastapi import APIRouter, Query, Request, Response
 
 from whatsapp_agent.config import settings
-from whatsapp_agent.database.engine import async_session_factory
 from whatsapp_agent.services.message_router import MessageRouter
 from whatsapp_agent.services.session_manager import SessionManager
 
@@ -90,13 +89,10 @@ async def receive_message(request: Request) -> dict:
             continue
 
         # Route through the framework
-        async with async_session_factory() as db_session:
-            response = await _message_router.route(
-                phone=sender_phone,
-                message=text_body,
-                db_session=db_session,
-            )
-            await db_session.commit()
+        response = await _message_router.route(
+            phone=sender_phone,
+            message=text_body,
+        )
 
         await _send_whatsapp_reply(sender_phone, response.reply_text)
 

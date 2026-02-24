@@ -2,7 +2,7 @@
 
 import asyncio
 
-from whatsapp_agent.database.engine import async_session_factory, init_db
+from whatsapp_agent.database.engine import init_db
 from whatsapp_agent.services.message_router import MessageRouter
 from whatsapp_agent.services.session_manager import SessionManager
 
@@ -20,12 +20,13 @@ async def main() -> None:
     print(f"  🤖  WhatsApp Agent — Chat Simulator")
     print(f"{'=' * 52}{RESET}\n")
 
-    # ── Initialise database ──────────────────────────────
+    # ── Initialise database (powers the mock external API) ─
     await init_db()
 
     # ── Ask for a phone number to simulate ───────────────
     print(f"{DIM}Tip: Use +15551234567 (known) or +19999999999 (unknown){RESET}")
-    print(f"{DIM}     Type 'quit' to exit, 'switch' to change phone number{RESET}\n")
+    print(f"{DIM}     Type 'quit' to exit, 'switch' to change phone number{RESET}")
+    print(f"{DIM}     OTP codes are printed in the server logs{RESET}\n")
 
     phone = input(f"{YELLOW}Enter phone number to simulate: {RESET}").strip()
     if not phone:
@@ -35,6 +36,19 @@ async def main() -> None:
     # ── Set up the framework ─────────────────────────────
     session_manager = SessionManager()
     router = MessageRouter(session_manager)
+
+    # ── Start the mock external API in the background ────
+    # We need the FastAPI app running so the ExternalClientAPI
+    # HTTP client can call it.
+    import uvicorn
+    from whatsapp_agent.main import app
+
+    config = uvicorn.Config(app, host="127.0.0.1", port=8000, log_level="warning")
+    server = uvicorn.Server(config)
+    server_task = asyncio.create_task(server.serve())
+
+    # Give the server a moment to start
+    await asyncio.sleep(0.5)
 
     while True:
         try:
@@ -61,15 +75,16 @@ async def main() -> None:
             continue
 
         # ── Route the message through the framework ──────
-        async with async_session_factory() as db_session:
-            response = await router.route(
-                phone=phone,
-                message=user_input,
-                db_session=db_session,
-            )
-            await db_session.commit()
+        response = await router.route(
+            phone=phone,
+            message=user_input,
+        )
 
         print(f"{GREEN}{BOLD}Agent:{RESET} {response.reply_text}\n")
+
+    # Shut down the background server
+    server.should_exit = True
+    await server_task
 
 
 if __name__ == "__main__":

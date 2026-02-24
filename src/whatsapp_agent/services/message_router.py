@@ -3,15 +3,11 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
 from whatsapp_agent.agents.auth_agent import AuthAgent
 from whatsapp_agent.agents.base import AgentResponse
-from whatsapp_agent.services.email_service import EmailService
+from whatsapp_agent.services.client_api import ExternalClientAPI
 from whatsapp_agent.services.session_manager import SessionManager
-
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +24,7 @@ class MessageRouter:
     def __init__(self, session_manager: SessionManager) -> None:
         self._session_manager = session_manager
 
-    async def route(
-        self, phone: str, message: str, db_session: AsyncSession
-    ) -> AgentResponse:
+    async def route(self, phone: str, message: str) -> AgentResponse:
         """Route a message to the appropriate agent and return its response.
 
         Parameters
@@ -39,15 +33,13 @@ class MessageRouter:
             The sender's phone number (from WhatsApp metadata).
         message:
             The raw text body of the message.
-        db_session:
-            An active async database session.
         """
         session = self._session_manager.get(phone)
 
         if not session.is_authenticated:
             # First contact or mid-auth flow
-            email_service = EmailService()
-            agent = AuthAgent(db_session=db_session, email_service=email_service)
+            client_api = ExternalClientAPI()
+            agent = AuthAgent(client_api=client_api)
             logger.info("Routing %s → %s", phone, agent.name)
 
             # On first message, use the phone itself for lookup

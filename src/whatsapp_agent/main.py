@@ -7,6 +7,7 @@ from fastapi import FastAPI
 
 from whatsapp_agent.config import settings
 from whatsapp_agent.database.engine import init_db
+from whatsapp_agent.mock_external_api.router import router as mock_api_router
 from whatsapp_agent.webhook.handler import router as webhook_router
 
 logging.basicConfig(
@@ -35,6 +36,7 @@ app = FastAPI(
 )
 
 app.include_router(webhook_router)
+app.include_router(mock_api_router)
 
 
 @app.get("/health")
